@@ -3,6 +3,144 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  
+  // Modal elements
+  const userIcon = document.getElementById("user-icon");
+  const userMenuModal = document.getElementById("user-menu-modal");
+  const loginModal = document.getElementById("login-modal");
+  const loginForm = document.getElementById("login-form");
+  const loginMessage = document.getElementById("login-message");
+  const userDisplay = document.getElementById("user-display");
+  const openLoginBtn = document.getElementById("open-login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const logoutSection = document.getElementById("logout-section");
+  const userMenuButtons = document.getElementById("user-menu-buttons");
+  
+  let currentUser = null;
+
+  // Check current user on page load
+  async function checkCurrentUser() {
+    try {
+      const response = await fetch("/current-user");
+      const data = await response.json();
+      currentUser = data.user;
+      updateUIBasedOnAuth();
+    } catch (error) {
+      console.error("Error checking user:", error);
+    }
+  }
+
+  // Update UI based on authentication status
+  function updateUIBasedOnAuth() {
+    const signupContainer = document.getElementById("signup-container");
+    
+    if (currentUser) {
+      userDisplay.textContent = `Logged in as: ${currentUser}`;
+      userMenuButtons.classList.add("hidden");
+      logoutSection.classList.remove("hidden");
+      signupContainer.style.display = "block";
+    } else {
+      userDisplay.textContent = "Not Logged In";
+      userMenuButtons.classList.remove("hidden");
+      logoutSection.classList.add("hidden");
+      signupContainer.style.display = "none";
+    }
+    
+    updateDeleteButtons();
+  }
+
+  // Update delete button visibility based on auth
+  function updateDeleteButtons() {
+    const deleteButtons = document.querySelectorAll(".delete-btn");
+    if (currentUser) {
+      deleteButtons.forEach(btn => btn.style.display = "block");
+    } else {
+      deleteButtons.forEach(btn => btn.style.display = "none");
+    }
+  }
+
+  // Modal controls
+  userIcon.addEventListener("click", () => {
+    userMenuModal.classList.remove("hidden");
+  });
+
+  openLoginBtn.addEventListener("click", () => {
+    userMenuModal.classList.add("hidden");
+    loginModal.classList.remove("hidden");
+  });
+
+  // Close modals
+  document.querySelectorAll(".close").forEach((closeBtn) => {
+    closeBtn.addEventListener("click", (e) => {
+      e.target.closest(".modal").classList.add("hidden");
+    });
+  });
+
+  window.addEventListener("click", (event) => {
+    if (event.target.classList.contains("modal")) {
+      event.target.classList.add("hidden");
+    }
+  });
+
+  // Handle login
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch(
+        `/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+        {
+          method: "POST",
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        currentUser = result.username;
+        loginMessage.textContent = result.message;
+        loginMessage.className = "success";
+        loginForm.reset();
+
+        setTimeout(() => {
+          loginModal.classList.add("hidden");
+          loginMessage.classList.add("hidden");
+        }, 1500);
+
+        updateUIBasedOnAuth();
+      } else {
+        loginMessage.textContent = result.detail || "Login failed";
+        loginMessage.className = "error";
+      }
+
+      loginMessage.classList.remove("hidden");
+    } catch (error) {
+      loginMessage.textContent = "Login error. Please try again.";
+      loginMessage.className = "error";
+      loginMessage.classList.remove("hidden");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  // Handle logout
+  logoutBtn.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/logout", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        currentUser = null;
+        userMenuModal.classList.add("hidden");
+        updateUIBasedOnAuth();
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  });
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -30,7 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}" style="display: ${currentUser ? 'block' : 'none'};">❌</button></li>`
                   )
                   .join("")}
               </ul>
@@ -156,5 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initialize app
+  checkCurrentUser();
   fetchActivities();
 });
+

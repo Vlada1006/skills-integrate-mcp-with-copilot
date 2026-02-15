@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+import json
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -18,6 +19,14 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+# Load teachers from JSON file
+with open(os.path.join(Path(__file__).parent, "teachers.json"), "r") as f:
+    teachers_data = json.load(f)
+    teachers = {teacher["username"]: teacher["password"] for teacher in teachers_data["teachers"]}
+
+# In-memory session storage (teacher username)
+current_user = None
 
 # In-memory activity database
 activities = {
@@ -78,7 +87,30 @@ activities = {
 }
 
 
-@app.get("/")
+@app.post("/login")
+def login(username: str, password: str):
+    """Login endpoint for teachers"""
+    global current_user
+    
+    if username not in teachers or teachers[username] != password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    current_user = username
+    return {"message": f"Logged in as {username}", "username": username}
+
+
+@app.post("/logout")
+def logout():
+    """Logout endpoint"""
+    global current_user
+    current_user = None
+    return {"message": "Logged out successfully"}
+
+
+@app.get("/current-user")
+def get_current_user():
+    """Get current logged in user"""
+    return {"user": current_user}
 def root():
     return RedirectResponse(url="/static/index.html")
 
@@ -90,7 +122,11 @@ def get_activities():
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
-    """Sign up a student for an activity"""
+    """Sign up a student for an activity (teacher only)"""
+    # Check if user is authenticated
+    if current_user is None:
+        raise HTTPException(status_code=403, detail="Only teachers can register students. Please login first.")
+    
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -112,7 +148,11 @@ def signup_for_activity(activity_name: str, email: str):
 
 @app.delete("/activities/{activity_name}/unregister")
 def unregister_from_activity(activity_name: str, email: str):
-    """Unregister a student from an activity"""
+    """Unregister a student from an activity (teacher only)"""
+    # Check if user is authenticated
+    if current_user is None:
+        raise HTTPException(status_code=403, detail="Only teachers can unregister students. Please login first.")
+    
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
